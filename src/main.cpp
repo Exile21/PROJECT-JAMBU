@@ -19,6 +19,8 @@ const char *serverUrl = "http://192.168.1.12:8080/data"; // IP nya diganti -> if
 const uint8_t DATA_PIN = 17;  // HX711 Data pin
 const uint8_t CLOCK_PIN = 18; // HX711 Clock pin
 
+const float full_galon_weight = 20000; // Berat penuh galon dalam gram
+
 HX711 scale;
 
 // Calibration factor for grams (update after calibration)
@@ -59,10 +61,13 @@ void sendData(float weight)
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
 
+    // Calculate percentage
+    float percentage = (weight / full_galon_weight) * 100.0;
+
     // Create JSON payload
     String payload = "{";
-    payload += "\"galon\": \"galon A\", ";
-    payload += "\"value\": " + String(weight, 6); // Send as a proper float with more precision
+    payload += "\"galon\": \"galon A\", "; // Ganti dengan identitas galon
+    payload += "\"value\": " + String(percentage, 2); // Send as percentage with 2 decimal places
     payload += "}";
 
     // Send POST request
