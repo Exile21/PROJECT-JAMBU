@@ -13,7 +13,7 @@ const char *ssid = "PlayMita"; // Nama WIFI
 const char *password = "MITAT0BRUTB41K"; // Password WIFI
 
 // HTTP server details
-const char *serverUrl = "http://192.168.1.12:8080/data";
+const char *serverUrl = "http://192.168.1.12:8080/data"; // IP nya diganti -> ifconfig trus cari ip yang depannya 192.168.1.x
 
 // Define the pins for HX711
 const uint8_t DATA_PIN = 17;  // HX711 Data pin
