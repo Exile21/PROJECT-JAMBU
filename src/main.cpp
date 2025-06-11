@@ -9,11 +9,11 @@ const unsigned long SEND_INTERVAL = 1000; // 1 second in milliseconds
 const float WEIGHT_CHANGE_THRESHOLD = 2;  // Minimum weight change to trigger sending (in grams)
 
 // Network credentials
-const char *ssid = "PlayMita";           // Nama WIFI
-const char *password = "MITAT0BRUTB41K"; // Password WIFI
+const char *ssid = "YANTO_WIFI";           // Nama WIFI
+const char *password = "martiarganteng"; // Password WIFI
 
 // HTTP server details
-const char *serverUrl = "http://192.168.1.5:8080/data"; // IP nya diganti -> ifconfig trus cari ip yang depannya 192.168.1.x
+const char *serverUrl = "http://192.168.1.19:8080/data"; // IP nya diganti -> ifconfig trus cari ip yang depannya 192.168.1.x
 
 // Define the pins for HX711
 const uint8_t DATA_PIN = 17;  // HX711 Data pin
@@ -24,7 +24,8 @@ const float full_galon_weight = 20000; // Berat penuh galon dalam gram
 HX711 scale;
 
 // Calibration factor for grams (update after calibration)
-float calibrationFactor = 99.68; // Added negative sign to invert readings
+float calibrationFactor = 28.6; // Fine-tuned: 26.5 * (19000/17606.94) = ~28.6
+float zeroOffset = 0; // Offset to correct zero reading
 
 // Function to connect to Wi-Fi
 void connectWiFi()
@@ -107,14 +108,28 @@ void setup()
   // Initialize HX711
   scale.begin(DATA_PIN, CLOCK_PIN);
 
-  // Set scale
+  // Set scale with initial calibration factor
   scale.set_scale(calibrationFactor);
 
-  // Tare the scale
-  Serial.println("Taring... Remove all weight.");
-  delay(2000);
+  // Improved taring process
+  Serial.println("Taring... Remove all weight and wait.");
+  delay(3000);
   scale.tare(); // Reset scale to zero
+  delay(1000);
+  
+  // Take a few readings to establish zero offset
+  float zeroSum = 0;
+  for(int i = 0; i < 10; i++) {
+    if(scale.is_ready()) {
+      zeroSum += scale.get_units();
+      delay(100);
+    }
+  }
+  zeroOffset = zeroSum / 10.0;
+  
   Serial.println("Tare completed");
+  Serial.print("Zero offset: ");
+  Serial.println(zeroOffset);
 }
 
 void loop()
@@ -126,32 +141,56 @@ void loop()
   {
     if (scale.is_ready())
     {
-      // Get weight in grams
-      float currentWeight = scale.get_units();
-
-      // Calculate percentage
-      float percentage = (currentWeight / full_galon_weight) * 100.0;
-
-      Serial.print("Weight: ");
-      Serial.print(currentWeight, 2);
-      Serial.println(" g");
-
-      // Output the percentage value as well
-      Serial.print("Percentage: ");
-      Serial.print(percentage, 2);
-      Serial.println(" %");
-
-      // Check if weight has changed significantly
-      if (abs(currentWeight - lastWeight) >= WEIGHT_CHANGE_THRESHOLD)
-      {
-        // Send weight data to HTTP server
-        sendData(currentWeight);
-        // Update last sent weight
-        lastWeight = currentWeight;
+      // Take multiple readings for stability
+      float weightSum = 0;
+      int validReadings = 0;
+      
+      for(int i = 0; i < 5; i++) {
+        if(scale.is_ready()) {
+          float reading = scale.get_units();
+          weightSum += reading;
+          validReadings++;
+          delay(20); // Small delay between readings
+        }
       }
-      else
-      {
-        Serial.println("Weight hasn't changed significantly. Not sending data.");
+      
+      if(validReadings > 0) {
+        // Get average weight and apply zero offset correction
+        float rawWeight = weightSum / validReadings;
+        float currentWeight = rawWeight - zeroOffset;
+        
+        // Ensure weight doesn't go negative (set minimum to 0)
+        if (currentWeight < 0) {
+          currentWeight = 0;
+        }
+        
+        // Round to nearest gram for stability
+        currentWeight = round(currentWeight);
+
+        // Calculate percentage
+        float percentage = (currentWeight / full_galon_weight) * 100.0;
+
+        Serial.print("Weight: ");
+        Serial.print(currentWeight, 2);
+        Serial.println(" g");
+
+        // Output the percentage value as well
+        Serial.print("Percentage: ");
+        Serial.print(percentage, 2);
+        Serial.println(" %");
+
+        // Check if weight has changed significantly
+        if (abs(currentWeight - lastWeight) >= WEIGHT_CHANGE_THRESHOLD)
+        {
+          // Send weight data to HTTP server
+          sendData(currentWeight);
+          // Update last sent weight
+          lastWeight = currentWeight;
+        }
+        else
+        {
+          Serial.println("Weight hasn't changed significantly. Not sending data.");
+        }
       }
     }
     else
