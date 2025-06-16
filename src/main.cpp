@@ -10,7 +10,7 @@ const float WEIGHT_CHANGE_THRESHOLD = 2;  // Minimum weight change to trigger se
 
 // Network credentials
 const char *ssid = "YANTO_WIFI";           // Nama WIFI
-const char *password = "martiarganteng"; // Password WIFI
+const char *password = "martiarganteng"; // Password WIFI (leave empty "" for open networks)
 
 // HTTP server details
 const char *serverUrl = "http://192.168.1.19:8080/data"; // IP nya diganti -> ifconfig trus cari ip yang depannya 192.168.1.x
@@ -31,7 +31,15 @@ float zeroOffset = 0; // Offset to correct zero reading
 void connectWiFi()
 {
   Serial.println("Attempting to connect to Wi-Fi...");
-  WiFi.begin(ssid, password);
+  
+  // Check if password is provided (for open networks, use empty string)
+  if (strlen(password) == 0) {
+    WiFi.begin(ssid); // Connect to open network
+    Serial.println("Connecting to open WiFi network...");
+  } else {
+    WiFi.begin(ssid, password); // Connect to password-protected network
+    Serial.println("Connecting to password-protected WiFi network...");
+  }
 
   int attempt = 0;
   while (WiFi.status() != WL_CONNECTED)
