@@ -30,7 +30,56 @@ float zeroOffset = 0; // Offset to correct zero reading
 // Function to connect to Wi-Fi
 void connectWiFi()
 {
-  Serial.println("Attempting to connect to Wi-Fi...");
+  Serial.println("=== WiFi Connection Debug ===");
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(ssid);
+  Serial.print("Password length: ");
+  Serial.println(strlen(password));
+  
+  // Disconnect any previous connection
+  WiFi.disconnect();
+  delay(1000);
+  
+  // Set WiFi mode to station
+  WiFi.mode(WIFI_STA);
+  delay(1000);
+  
+  // Scan for networks first to verify SSID exists
+  Serial.println("Scanning for available networks...");
+  int n = WiFi.scanNetworks();
+  if (n == 0) {
+    Serial.println("No networks found!");
+    return;
+  }
+  
+  bool ssidFound = false;
+  for (int i = 0; i < n; ++i) {
+    Serial.print(i + 1);
+    Serial.print(": ");
+    Serial.print(WiFi.SSID(i));
+    Serial.print(" (");
+    Serial.print(WiFi.RSSI(i));
+    Serial.print(" dBm) ");
+    Serial.println((WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "Open" : "Encrypted");
+    
+    if (WiFi.SSID(i) == ssid) {
+      ssidFound = true;
+      Serial.print("*** Target network found with signal strength: ");
+      Serial.print(WiFi.RSSI(i));
+      Serial.println(" dBm ***");
+    }
+  }
+  
+  if (!ssidFound) {
+    Serial.println("ERROR: Target SSID not found in scan results!");
+    Serial.println("Please check the SSID name and make sure you're in range.");
+    return;
+  }
+  
+  // Clear scan results
+  WiFi.scanDelete();
+  
+  Serial.println("Starting connection attempt...");
   
   // Check if password is provided (for open networks, use empty string)
   if (strlen(password) == 0) {
@@ -42,26 +91,104 @@ void connectWiFi()
   }
 
   int attempt = 0;
-  while (WiFi.status() != WL_CONNECTED)
+  while (WiFi.status() != WL_CONNECTED && attempt < 30)
   {
     delay(500);
     Serial.print(".");
-    attempt++;
-    if (attempt > 20)
-    { // Timeout after 10 seconds
-      Serial.println("\nFailed to connect to Wi-Fi. Please check your credentials.");
-      return;
+    Serial.print("(");
+    Serial.print(attempt + 1);
+    Serial.print(")");
+    
+    // Print WiFi status every 5 attempts
+    if ((attempt + 1) % 5 == 0) {
+      Serial.print(" Status: ");
+      switch(WiFi.status()) {
+        case WL_IDLE_STATUS:
+          Serial.print("IDLE");
+          break;
+        case WL_NO_SSID_AVAIL:
+          Serial.print("NO_SSID");
+          break;
+        case WL_SCAN_COMPLETED:
+          Serial.print("SCAN_COMPLETED");
+          break;
+        case WL_CONNECTED:
+          Serial.print("CONNECTED");
+          break;
+        case WL_CONNECT_FAILED:
+          Serial.print("CONNECT_FAILED");
+          break;
+        case WL_CONNECTION_LOST:
+          Serial.print("CONNECTION_LOST");
+          break;
+        case WL_DISCONNECTED:
+          Serial.print("DISCONNECTED");
+          break;
+        default:
+          Serial.print("UNKNOWN");
+      }
+      Serial.println();
     }
+    
+    attempt++;
   }
 
-  Serial.println("\nWi-Fi connected");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n=== WiFi Connected Successfully! ===");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("Subnet mask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("DNS: ");
+    Serial.println(WiFi.dnsIP());
+    Serial.print("Signal strength: ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+  } else {
+    Serial.println("\n=== WiFi Connection Failed! ===");
+    Serial.print("Final status: ");
+    switch(WiFi.status()) {
+      case WL_NO_SSID_AVAIL:
+        Serial.println("Network not found");
+        break;
+      case WL_CONNECT_FAILED:
+        Serial.println("Wrong password or authentication failed");
+        break;
+      case WL_CONNECTION_LOST:
+        Serial.println("Connection lost");
+        break;
+      case WL_DISCONNECTED:
+        Serial.println("Disconnected");
+        break;
+      default:
+        Serial.println("Unknown error");
+    }
+    Serial.println("Troubleshooting tips:");
+    Serial.println("1. Double-check SSID and password");
+    Serial.println("2. Make sure you're in range of the router");
+    Serial.println("3. Try restarting the ESP32");
+    Serial.println("4. Check if the network is 2.4GHz (ESP32 doesn't support 5GHz)");
+  }
 }
 
 // Function to send weight data to HTTP server
 void sendData(float weight)
 {
+  // Check WiFi connection status
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("WiFi Disconnected! Attempting to reconnect...");
+    connectWiFi();
+    
+    // If still not connected after reconnection attempt, return
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Reconnection failed. Skipping data send.");
+      return;
+    }
+  }
+  
   if (WiFi.status() == WL_CONNECTED)
   {
     HTTPClient http;
